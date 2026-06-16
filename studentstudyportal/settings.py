@@ -125,3 +125,4 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 
 CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
 CRISPY_TEMPLATE_PACK = "bootstrap5"
+YOUTUBE_API_KEY = "AIzaSyBBOx9_uutI_wgZlpNKdhwf2duefIsds7M"

@@ -2,8 +2,16 @@ from django.shortcuts import render, redirect
 from . forms import *
 from django.views import generic
 from django.contrib import messages
-from youtubesearchpython import VideosSearch
-from . import patches
+# from youtubesearchpython import VideosSearch
+from django.conf import settings
+from googleapiclient.discovery import build
+from isodate import parse_duration
+from datetime import datetime, timezone
+from dateutil.relativedelta import relativedelta
+
+
+API_KEY = settings.YOUTUBE_API_KEY
+
 
 # Create your views here.
 def home(request):
@@ -77,50 +85,116 @@ def delete_homework(request,pk=None):
     Homework.objects.get(id=pk).delete()
     return redirect('homework')
 
+
+def time_ago(published_at):
+    published_date = datetime.strptime(
+        published_at,
+        "%Y-%m-%dT%H:%M:%SZ"
+    ).replace(tzinfo=timezone.utc)
+
+    now = datetime.now(timezone.utc)
+    diff = relativedelta(now, published_date)
+
+    if diff.years > 0:
+        return f"{diff.years} year{'s' if diff.years > 1 else ''} ago"
+    elif diff.months > 0:
+        return f"{diff.months} month{'s' if diff.months > 1 else ''} ago"
+    elif diff.days > 0:
+        return f"{diff.days} day{'s' if diff.days > 1 else ''} ago"
+    elif diff.hours > 0:
+        return f"{diff.hours} hour{'s' if diff.hours > 1 else ''} ago"
+    else:
+        return "Just now"
+
+
 def youtube(request):
+    form = DashboardForm()
+    result_list = []
+
     if request.method == "POST":
         form = DashboardForm(request.POST)
+
         if form.is_valid():
-            text = form.cleaned_data.get('text')
-            video = VideosSearch(text, limit=10)
-            result_list = []
-            
-            results = video.result() or {}
-            for item in results.get('result', []):
-                # Safely extract thumbnails URL
-                thumbnails = item.get('thumbnails') or []
-                thumbnail_url = thumbnails[0].get('url', '') if thumbnails else ''
-                
-                # Safely extract channel name
-                channel_data = item.get('channel') or {}
-                channel_name = channel_data.get('name', '')
+            text = form.cleaned_data['text']
 
-                # Safely extract views count
-                view_data = item.get('viewCount') or {}
-                view_count = view_data.get('short', '')
+            youtube = build(
+                "youtube",
+                "v3",
+                developerKey=settings.YOUTUBE_API_KEY
+            )
 
-                # Safely compile description snippets
-                description_snippet = item.get('descriptionSnippet') or []
-                desc = "".join(j.get('text', '') for j in description_snippet if isinstance(j, dict))
+            search_response = youtube.search().list(
+                q=text,
+                part="snippet",
+                maxResults=10,
+                type="video"
+            ).execute()
 
-                result_list.append({
-                    'input': text,
-                    'title': item.get('title'),
-                    'duration': item.get('duration'),
-                    'thumbnail': thumbnail_url,
-                    'channel': channel_name,
-                    'link': item.get('link'),
-                    'views': view_count,
-                    'published': item.get('publishedTime'),
-                    'description': desc,
-                })
-            
-            context = {
-                'form': form,
-                'results': result_list
-            }
-            return render(request, "dashboard/youtube.html", context)
-    else:
-        form = DashboardForm()
-    context = {'form': form}
-    return render(request, "dashboard/youtube.html", context)
+            video_ids = [
+                item["id"]["videoId"]
+                for item in search_response["items"]
+            ]
+
+            video_response = youtube.videos().list(
+                part="contentDetails,statistics",
+                id=",".join(video_ids)
+            ).execute()
+
+            video_details = {}
+
+            for item in video_response["items"]:
+                views_count = int(
+                    item["statistics"].get("viewCount", 0)
+                )
+
+                if views_count >= 1_000_000:
+                    views = f"{views_count / 1_000_000:.1f}M views"
+                elif views_count >= 1_000:
+                    views = f"{views_count / 1_000:.1f}K views"
+                else:
+                    views = f"{views_count} views"
+
+                duration = str(
+                    parse_duration(
+                        item["contentDetails"]["duration"]
+                    )
+                )
+
+                video_details[item["id"]] = {
+                    "duration": duration,
+                    "views": views,
+                }
+
+            for item in search_response["items"]:
+                video_id = item["id"]["videoId"]
+
+                result_dict = {
+                    "input": text,
+                    "title": item["snippet"]["title"],
+                    "description": item["snippet"]["description"],
+                    "thumbnail": item["snippet"]["thumbnails"]["high"]["url"],
+                    "channel": item["snippet"]["channelTitle"],
+                    "link": f"https://www.youtube.com/watch?v={video_id}",
+                    "published": time_ago(
+                        item["snippet"]["publishedAt"]
+                    ),
+                    "duration": video_details.get(
+                        video_id, {}
+                    ).get("duration", "N/A"),
+                    "views": video_details.get(
+                        video_id, {}
+                    ).get("views", "N/A"),
+                }
+
+                result_list.append(result_dict)
+
+    context = {
+        "form": form,
+        "results": result_list,
+    }
+
+    return render(
+        request,
+        "dashboard/youtube.html",
+        context
+    )
