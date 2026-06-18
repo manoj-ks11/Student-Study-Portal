@@ -198,3 +198,6 @@ def youtube(request):
         "dashboard/youtube.html",
         context
     )
+
+def todo(request):
+    return render(request, "dashboard/todo.html")
