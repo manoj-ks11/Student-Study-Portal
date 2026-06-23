@@ -8,6 +8,7 @@ from googleapiclient.discovery import build
 from isodate import parse_duration
 from datetime import datetime, timezone
 from dateutil.relativedelta import relativedelta
+import requests
 
 
 API_KEY = settings.YOUTUBE_API_KEY
@@ -244,3 +245,51 @@ def update_todo(request,pk=None):
 def delete_todo(request,pk=None):
     Todo.objects.get(id=pk).delete()
     return redirect('todo')
+
+def books(request):
+    form = DashboardForm()
+    context = {
+        'form':form,
+    }
+    return render(request, "dashboard/books.html", context)
+
+def books(request):
+    form = DashboardForm()
+    result_list = []
+
+    if request.method == "POST":
+        form = DashboardForm(request.POST)
+
+        if form.is_valid():
+            text = form.cleaned_data['text']
+
+            url = f"https://www.googleapis.com/books/v1/volumes?q={text}&key=AIzaSyB5eJGuPXQACEpXyWXwPWXrcK9DGB3bHqs"
+            r = requests.get(url)
+            answer = r.json()
+
+            # print(answer)   # Debugging
+
+            items = answer.get("items", [])
+
+            for item in items[:10]:
+                volume = item.get("volumeInfo", {})
+
+                result_dict = {
+                    'title': volume.get('title'),
+                    'subtitle': volume.get('subtitle'),
+                    'description': volume.get('description'),
+                    'count': volume.get('pageCount'),
+                    'categories': volume.get('categories'),
+                    'rating': volume.get('averageRating'),
+                    'thumbnail': volume.get('imageLinks', {}).get('thumbnail'),
+                    'preview': volume.get('previewLink'),
+                }
+
+                result_list.append(result_dict)
+
+    context = {
+        'form': form,
+        'results': result_list,
+    }
+
+    return render(request, "dashboard/books.html", context)
