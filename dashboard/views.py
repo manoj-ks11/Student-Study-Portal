@@ -9,6 +9,7 @@ from isodate import parse_duration
 from datetime import datetime, timezone
 from dateutil.relativedelta import relativedelta
 import requests
+import wikipedia
 
 
 API_KEY = settings.YOUTUBE_API_KEY
@@ -293,3 +294,67 @@ def books(request):
     }
 
     return render(request, "dashboard/books.html", context)
+
+def dictionary(request):
+    if request.method == "POST":
+        form = DashboardForm(request.POST)
+
+        if form.is_valid():
+            text = form.cleaned_data['text']
+
+            url = f"https://api.dictionaryapi.dev/api/v2/entries/en/{text}"
+            r = requests.get(url)
+            answer = r.json()
+
+            try:
+                phonetics = answer[0]['phonetics'][0].get('text', '')
+                audio = answer[0]['phonetics'][0].get('audio', '')
+                definition = answer[0]['meanings'][0]['definitions'][0].get('definition', '')
+                example = answer[0]['meanings'][0]['definitions'][0].get('example', '')
+                synonyms = answer[0]['meanings'][0]['definitions'][0].get('synonyms', [])
+
+                context = {
+                    'form': form,
+                    'input': text,
+                    'phonetics': phonetics,
+                    'audio': audio,
+                    'definition': definition,
+                    'example': example,
+                    'synonyms': synonyms,
+                }
+
+            except (KeyError, IndexError):
+                context = {
+                    'form': form,
+                    'input': "",
+                }
+
+            return render(request, "dashboard/dictionary.html", context)
+
+    else:
+        form = DashboardForm()
+
+    context = {
+        'form': form,
+    }
+
+    return render(request, "dashboard/dictionary.html", context)
+
+def wiki(request):
+    if request.method == "POST":
+        text = request.POST['text']
+        form = DashboardForm(request.POST)
+        search = wikipedia.page(text)
+        context = {
+            'form':form,
+            'title':search.title,
+            'link':search.url,
+            'details':search.summary
+        }
+        return render(request, "dashboard/wiki.html",context)
+    else:
+        form = DashboardForm()
+        context = {
+            'form':form
+        }
+    return render(request, "dashboard/wiki.html",context)
