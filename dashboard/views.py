@@ -358,3 +358,52 @@ def wiki(request):
             'form':form
         }
     return render(request, "dashboard/wiki.html",context)
+
+
+def conversion(request):
+    form = ConversionForm(request.POST or None)
+    m_form = None
+    answer = ""
+    show_input = False
+
+    if request.method == "POST" and form.is_valid():
+
+        measurement = form.cleaned_data["measurement"]
+        show_input = True
+
+        if measurement == "length":
+            m_form = ConversionLengthForm(request.POST or None)
+
+            if m_form.is_valid():
+                value = float(m_form.cleaned_data["input"])
+                first = m_form.cleaned_data["measure1"]
+                second = m_form.cleaned_data["measure2"]
+
+                if first == "yard" and second == "foot":
+                    answer = f"{value:g} Yard = {(value*3):g} Foot"
+
+                elif first == "foot" and second == "yard":
+                    answer = f"{value:g} Foot = {(value/3):g} Yard"
+
+        elif measurement == "mass":
+            m_form = ConversionMassForm(request.POST or None)
+
+            if m_form.is_valid():
+                value = float(m_form.cleaned_data["input"])
+                first = m_form.cleaned_data["measure1"]
+                second = m_form.cleaned_data["measure2"]
+
+                if first == "pound" and second == "kilogram":
+                    answer = f"{value:g} Pound = {(value*0.453592):g} Kilogram"
+
+                elif first == "kilogram" and second == "pound":
+                    answer = f"{value:g} Kilogram = {(value*2.20462):g} Pound"
+
+    context = {
+        "form": form,
+        "m_form": m_form,
+        "input": show_input,
+        "answer": answer,
+    }
+
+    return render(request, "dashboard/conversion.html", context)
