@@ -264,7 +264,7 @@ def books(request):
         if form.is_valid():
             text = form.cleaned_data['text']
 
-            url = f"https://www.googleapis.com/books/v1/volumes?q={text}&key=AIzaSyB5eJGuPXQACEpXyWXwPWXrcK9DGB3bHqs"
+            url = f"https://www.googleapis.com/books/v1/volumes?q={text}&key={settings.GOOGLE_BOOKS_API_KEY}"
             r = requests.get(url)
             answer = r.json()
 
